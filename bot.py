@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 import edge_tts
 from groq import Groq
+from pydub import AudioSegment # BUNU ƏLAVƏ ET
 
 # Railway Variables-dan key-ləri götür
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -35,13 +36,17 @@ async def voice_handler(message: types.Message):
         file = await bot.get_file(message.voice.file_id)
         await bot.download_file(file.file_path, "voice.ogg")
 
-        # 2. Səsi mətnə çevir
-        r = sr.Recognizer()
-        with sr.AudioFile("voice.ogg") as source:
-            audio = r.record(source)
-        text = r.recognize_google(audio, language="az-AZ")
+        # 2. OGG -> WAV çevir. BURA VACİBDİR
+        audio = AudioSegment.from_ogg("voice.ogg")
+        audio.export("voice.wav", format="wav")
 
-        # 3. Groq-a göndər
+        # 3. Səsi mətnə çevir
+        r = sr.Recognizer()
+        with sr.AudioFile("voice.wav") as source: # WAV oxuyuruq
+            audio_data = r.record(source)
+        text = r.recognize_google(audio_data, language="az-AZ")
+
+        # 4. Groq-a göndər
         chat_completion = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -51,11 +56,11 @@ async def voice_handler(message: types.Message):
         )
         reply_text = chat_completion.choices[0].message.content
 
-        # 4. Cavabı səsləndir
+        # 5. Cavabı səsləndir
         communicate = edge_tts.Communicate(reply_text, VOICE)
         await communicate.save("reply.mp3")
 
-        await message.answer_voice(types.FSInputFile("reply.mp3"), caption=reply_text)
+        await message.answer_voice(types.FSInputFile("reply.mp3"), caption=f"Sən dedin: {text}\n\nCavab: {reply_text}")
         await msg.delete()
 
     except Exception as e:
