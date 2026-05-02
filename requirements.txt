@@ -2,3 +2,4 @@ aiogram
 speechrecognition
 groq
 edge-tts
+pydub
